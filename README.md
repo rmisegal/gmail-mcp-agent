@@ -141,16 +141,32 @@
 >     ```
 > 
 > ### 4. First-Time Authentication (OAuth 2.0)
-> 
+>
 > The first time you run the server, it will need to get your permission to access your Gmail account.
-> 
+>
+> The authentication process is **fully automated** and works in both Linux and Windows environments:
+>
+> #### **For WSL/Windows Users:**
+> - The server automatically detects you're running in WSL
+> - It opens the authentication URL in your default Windows browser using PowerShell
+> - Complete the authentication in your browser that opens automatically
+>
+> #### **For Native Linux Users:**
+> - The server detects you're running in native Linux
+> - It automatically opens the authentication URL in your default Linux browser (Firefox, Chrome, etc.)
+> - Complete the authentication in your browser that opens automatically
+>
+> #### **Authentication Steps:**
 > 1.  Run the server (see [Usage](#usage) below).
-> 2.  A message will appear in your console with a URL.
-> 3.  Copy this URL and paste it into your web browser.
-> 4.  Log in to the Google account you want the agent to access.
-> 5.  You will be shown a consent screen asking for permission to "View your email messages and settings." Click **Allow**.
-> 6.  If you see a warning that "Google hasn't verified this app," click **Advanced** and then **Go to (unsafe)**. This is expected for local desktop applications.
-> 7.  After you approve, the authentication flow will complete, and the server will create a `private/token.json` file. This file will be used for all future authentications, so you will only need to do this once.
+> 2.  Your browser should open automatically with the authentication page
+> 3.  Log in to the Google account you want the agent to access.
+> 4.  You will be shown a consent screen asking for permission to "View your email messages and settings." Click **Allow**.
+> 5.  If you see a warning that "Google hasn't verified this app," click **Advanced** and then **Go to (unsafe)**. This is expected for local desktop applications.
+> 6.  After you approve, the authentication flow will complete, and the server will create a `private/token.json` file. This file will be used for all future authentications, so you will only need to do this once.
+>
+> **If the browser doesn't open automatically:**
+> - **WSL users:** The console will show the URL - manually copy it to your Windows browser
+> - **Linux users:** The console will show the URL - manually copy it to your browser
 > 
 > ---
 

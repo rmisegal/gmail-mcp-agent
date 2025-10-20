@@ -12,6 +12,7 @@ import os
 import json
 import logging
 import base64
+import webbrowser
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from pathlib import Path
@@ -92,12 +93,12 @@ class GmailMCPServer:
     def authenticate(self) -> Credentials:
         """
         Authenticate with Gmail API using OAuth 2.0.
-        
+
         Returns:
             Credentials object for Gmail API access
         """
         creds = None
-        
+
         # Load existing token if available
         if os.path.exists(self.token_path):
             try:
@@ -105,7 +106,7 @@ class GmailMCPServer:
                 logger.info("Loaded existing credentials from token.json")
             except Exception as e:
                 logger.warning(f"Failed to load token: {e}")
-        
+
         # Refresh or get new credentials
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -115,21 +116,171 @@ class GmailMCPServer:
                 except Exception as e:
                     logger.warning(f"Failed to refresh token: {e}")
                     creds = None
-            
+
             if not creds:
-                # Run OAuth flow
+                # Configure browser for the environment
+                self._configure_browser()
+
+                # Run OAuth flow with console fallback for better reliability
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_path, SCOPES
                 )
-                creds = flow.run_local_server(port=0)
-                logger.info("Completed OAuth authentication flow")
-            
+
+                try:
+                    # Try to run with local server first (automatic)
+                    creds = flow.run_local_server(port=0)
+                    logger.info("Completed OAuth authentication flow via automatic browser")
+                except Exception as e:
+                    logger.warning(f"Automatic browser flow failed: {e}")
+                    logger.info("Falling back to console-based authentication")
+
+                    # Fallback to console-based flow
+                    creds = flow.run_console()
+                    logger.info("Completed OAuth authentication flow via console")
+
             # Save credentials for future use
             with open(self.token_path, 'w') as token:
                 token.write(creds.to_json())
                 logger.info(f"Saved credentials to {self.token_path}")
-        
+
         return creds
+
+    def _is_wsl(self) -> bool:
+        """Check if running in Windows Subsystem for Linux."""
+        try:
+            with open('/proc/version', 'r') as f:
+                version_info = f.read().lower()
+                return 'microsoft' in version_info or 'wsl' in version_info
+        except:
+            return False
+
+    def _configure_browser(self):
+        """Configure browser based on the environment (WSL or native Linux)."""
+        try:
+            if self._is_wsl():
+                logger.info("WSL detected, configuring Windows browser integration")
+                self._configure_wsl_browser()
+            else:
+                logger.info("Native Linux detected, configuring Linux browser")
+                self._configure_linux_browser()
+        except Exception as e:
+            logger.warning(f"Failed to configure browser: {e}")
+            # Universal fallback
+            logger.info("Using fallback browser configuration")
+            self._configure_fallback_browser()
+
+    def _configure_wsl_browser(self):
+        """Configure browser for WSL environment to use Windows browser."""
+        try:
+            # Create a custom browser class that uses Windows PowerShell to open URLs
+            class WindowsChromeBrowser:
+                def open(self, url, new=0, autoraise=True):
+                    try:
+                        # Use PowerShell to open URL in default Windows browser
+                        import subprocess
+                        subprocess.run(['powershell.exe', '-Command', f'Start-Process "{url}"'],
+                                     check=True, capture_output=True)
+                        return True
+                    except Exception as e:
+                        logger.error(f"Failed to open URL with PowerShell: {e}")
+                        return False
+
+                def open_new(self, url):
+                    return self.open(url, new=1)
+
+                def open_new_tab(self, url):
+                    return self.open(url, new=2)
+
+            # Register our custom browser
+            webbrowser.register('windows-chrome', WindowsChromeBrowser, WindowsChromeBrowser())
+            os.environ['BROWSER'] = 'windows-chrome'
+            logger.info("Configured to use Windows browser via PowerShell")
+
+        except Exception as e:
+            logger.warning(f"Failed to configure Windows browser: {e}")
+            raise
+
+    def _configure_linux_browser(self):
+        """Configure browser for native Linux environment."""
+        try:
+            # Try common Linux browsers in order of preference
+            linux_browsers = [
+                'firefox',
+                'google-chrome',
+                'chrome',
+                'chromium',
+                'chromium-browser',
+                'opera',
+                'edge'
+            ]
+
+            configured = False
+            for browser in linux_browsers:
+                try:
+                    # Check if browser exists and is executable
+                    subprocess.run(['which', browser], check=True, capture_output=True)
+                    os.environ['BROWSER'] = browser
+                    logger.info(f"Configured to use Linux browser: {browser}")
+                    configured = True
+                    break
+                except subprocess.CalledProcessError:
+                    continue
+
+            if not configured:
+                # Try using xdg-open as fallback
+                try:
+                    subprocess.run(['which', 'xdg-open'], check=True, capture_output=True)
+                    os.environ['BROWSER'] = 'xdg-open'
+                    logger.info("Configured to use xdg-open for Linux browser")
+                    configured = True
+                except subprocess.CalledProcessError:
+                    pass
+
+            if not configured:
+                raise Exception("No suitable Linux browser found")
+
+        except Exception as e:
+            logger.warning(f"Failed to configure Linux browser: {e}")
+            raise
+
+    def _configure_fallback_browser(self):
+        """Configure universal fallback browser that works in most environments."""
+        try:
+            if self._is_wsl():
+                # WSL fallback: try multiple methods
+                fallback_methods = [
+                    'powershell.exe -Command "Start-Process \\"%s\\""',
+                    '/mnt/c/Windows/System32/cmd.exe /c start %s',
+                    'explorer.exe %s'
+                ]
+            else:
+                # Linux fallback
+                fallback_methods = [
+                    'xdg-open %s',
+                    'firefox %s',
+                    'google-chrome %s'
+                ]
+
+            for method in fallback_methods:
+                try:
+                    # Test if the method works by trying to parse it
+                    if '%s' in method:
+                        os.environ['BROWSER'] = method
+                        logger.info(f"Configured fallback browser method: {method}")
+                        return
+                except:
+                    continue
+
+            # Last resort: set a simple method that might work
+            os.environ['BROWSER'] = 'echo "Please open manually: %s"'
+            logger.warning("Using manual fallback - you'll need to open the URL manually")
+
+        except Exception as e:
+            logger.warning(f"Failed to configure fallback browser: {e}")
+
+    def _configure_windows_chrome(self):
+        """Legacy method - now delegates to _configure_browser()."""
+        self._configure_browser()
     
     def get_gmail_service(self):
         """Get or create Gmail API service."""
