@@ -169,24 +169,120 @@
 > 
 > ### Integration with Claude CLI
 > 
-> This agent is designed to be used as a sub-agent within Claude Code. To integrate it, you need to define it as an agent.
+> This agent is designed to be used as a sub-agent within Claude CLI/Code. Follow these detailed steps to integrate it.
 > 
-> 1.  **Create the Agent Definition File:**
->     In your Claude Code project, create a file named `gmail-extractor-agent.md` in the `/agents` folder.
+> #### Step 1: Install Claude CLI
 > 
-> 2.  **Add the Agent Configuration:**
->     Copy the contents of the `examples/gmail-extractor-agent.md` file from this repository into your new file. This defines the agent, its commands, and how to connect to it.
+> **For macOS/Linux:**
+> ```bash
+> npm install -g @anthropic-ai/claude-cli
+> # Or via Homebrew (macOS)
+> brew install anthropic-ai/tap/claude-cli
+> ```
 > 
->     ```markdown
->     # ... (contents of the example file) ...
->     ```
+> **For Windows:**
+> ```powershell
+> npm install -g @anthropic-ai/claude-cli
+> ```
 > 
-> 3.  **Use the Agent:**
->     With the server running, you can now call the agent from the Claude prompt:
+> **Verify installation:**
+> ```bash
+> claude --version
+> ```
 > 
->     > **/agent use gmail-extractor to fetch emails with the label "work-reports" from the last 7 days**
+> #### Step 2: Configure Claude CLI for MCP
 > 
-> The agent will execute the search and return a JSON object confirming the operation and providing the path to the output CSV file.
+> 1. **Create or edit the Claude CLI configuration file:**
+> 
+>    ```bash
+>    mkdir -p ~/.config/claude-cli
+>    nano ~/.config/claude-cli/config.json
+>    ```
+> 
+> 2. **Add the MCP server configuration:**
+> 
+>    ```json
+>    {
+>      "apiKey": "your_anthropic_api_key",
+>      "mcpServers": {
+>        "gmail-extractor": {
+>          "command": "python3",
+>          "args": [
+>            "/absolute/path/to/gmail-mcp-agent/src/gmail_mcp_server.py"
+>          ]
+>        }
+>      }
+>    }
+>    ```
+> 
+>    **Important:** Replace `/absolute/path/to/gmail-mcp-agent/` with the actual full path to your project directory.
+> 
+>    **To get the absolute path:**
+>    ```bash
+>    cd ~/gmail-mcp-agent && pwd
+>    ```
+> 
+> 3. **Alternative: Use the provided configuration template:**
+> 
+>    ```bash
+>    cp config/claude-cli-config.json ~/.config/claude-cli/config.json
+>    # Then edit the file to replace placeholder paths
+>    ```
+> 
+> #### Step 3: Create the Agent Definition
+> 
+> 1. **Create the agents directory:**
+> 
+>    ```bash
+>    mkdir -p ~/.config/claude-cli/agents
+>    ```
+> 
+> 2. **Copy the agent definition file:**
+> 
+>    ```bash
+>    cp examples/gmail-extractor-agent.md ~/.config/claude-cli/agents/
+>    ```
+> 
+>    Or create it manually:
+> 
+>    ```bash
+>    nano ~/.config/claude-cli/agents/gmail-extractor.md
+>    ```
+> 
+>    And paste the contents from `examples/gmail-extractor-agent.md`.
+> 
+> #### Step 4: Verify Agent Registration
+> 
+> ```bash
+> claude agents list
+> ```
+> 
+> You should see `gmail-extractor` in the list of available agents.
+> 
+> #### Step 5: Use the Agent
+> 
+> Start a Claude CLI session:
+> 
+> ```bash
+> claude
+> ```
+> 
+> Then invoke the agent with natural language commands:
+> 
+> **Example 1: Extract by label**
+> ```
+> /agent use gmail-extractor to fetch emails with the label "work-reports" from the last 7 days
+> ```
+> 
+> **Example 2: Extract by date range**
+> ```
+> /agent use gmail-extractor to fetch emails from 2025-09-01 to 2025-10-20
+> ```
+> 
+> **Example 3: Extract with custom filename**
+> ```
+> /agent use gmail-extractor to fetch emails with the label "Invoices" and save to invoices_q3.csv
+> ```
 > 
 > **Example Output:**
 > 
@@ -198,6 +294,25 @@
 >   "output_file": "csv/work-reports_emails_20251020_153000.csv"
 > }
 > ```
+> 
+> #### Troubleshooting
+> 
+> **Issue: "Agent not found"**
+> - Verify the agent definition file exists: `ls ~/.config/claude-cli/agents/gmail-extractor.md`
+> - Check file permissions: `chmod 644 ~/.config/claude-cli/agents/gmail-extractor.md`
+> - Restart Claude CLI
+> 
+> **Issue: "MCP server failed to start"**
+> - Verify Python path: `which python3`
+> - Test the server manually: `python3 src/gmail_mcp_server.py`
+> - Check that all environment variables are set in `.env`
+> 
+> **Issue: "Authentication failed"**
+> - Delete old token: `rm private/token.json`
+> - Run the server manually to complete OAuth flow
+> - Verify Gmail API credentials exist: `ls private/client_secret_*.json`
+> 
+> **For complete integration guide, see:** [docs/CLAUDE_CLI_INTEGRATION.md](docs/CLAUDE_CLI_INTEGRATION.md)
 > 
 > ---
 
